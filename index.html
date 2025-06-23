@@ -691,24 +691,33 @@
         }
         
         async function generateText(prompt) {
-            // NOTE: This API call requires a valid API key. 
-            // The key is left empty here because it's automatically provided in the development environment.
-            // For deployment on an external site like GitHub Pages, you must obtain your own API key
-            // from Google AI Studio and insert it here. Be aware of security risks of exposing keys client-side.
-            const apiKey = ""; // <-- Please insert your API key here for external deployment
+            // NOTE: The API key is left empty here as it's automatically provided in this environment.
+            // For external deployment, you must obtain your own API key from Google AI Studio and insert it here.
+            const apiKey = ""; // <-- Leave this empty for the Canvas environment
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.7, topK: 1, topP: 1, maxOutputTokens: 2048 }};
+            
+            // Simplified the payload for troubleshooting by removing generationConfig. The API will use default values.
+            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+            
             const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            
             if (!response.ok) {
-                // If the API returns an error (e.g., 4xx or 5xx), throw an error to be caught below.
                 const errorData = await response.json();
                 console.error("API Error Response:", errorData);
-                throw new Error(`API request failed with status ${response.status}`);
+                throw new Error(`API request failed with status ${response.status}. Details: ${JSON.stringify(errorData.error)}`);
             }
+            
             const result = await response.json();
+            
             if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
                 return result.candidates[0].content.parts[0].text;
             }
+
+            if (result.candidates?.[0]?.finishReason === 'SAFETY') {
+                 console.error("Response blocked due to safety settings:", result);
+                 return "AIの応答が安全上の理由でブロックされました。入力内容を変えてお試しください。";
+            }
+            
             console.error("Invalid API response structure:", result);
             return "有効な応答をAIから取得できませんでした。";
         }
@@ -734,7 +743,16 @@
 
         generateScriptBtn.addEventListener('click', async () => {
             const hearingText = hearingContentEl.value.trim();
-            if (!hearingText) { alert('ヒアリング内容を入力してください。'); return; }
+            
+            // Replaced alert() with a message in the result area, as alert() is not supported.
+            if (!hearingText) { 
+                resultContainerEl.style.display = 'block';
+                loaderEl.style.display = 'none';
+                scriptResultEl.style.display = 'block';
+                scriptResultEl.innerHTML = `<p class="text-red-500 font-bold">入力エラー</p><p class="text-slate-600 text-sm mt-2">ヒアリング内容を入力してください。</p>`;
+                return;
+            }
+
             resultContainerEl.style.display = 'block';
             scriptResultEl.style.display = 'none';
             loaderEl.style.display = 'flex';
@@ -746,8 +764,8 @@
                 scriptResultEl.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<h3>$1</h3>').replace(/\n/g, '<br>');
             } catch (error) {
                 console.error("Error generating text:", error);
-                // UPDATED: More informative error message for the user.
-                scriptResultEl.innerHTML = `<p class="text-red-500 font-bold">エラーが発生しました。</p><p class="text-slate-600 text-sm mt-2">APIキーが有効でないか、ネットワークに問題がある可能性があります。外部サイトでご利用の場合は、有効なAPIキーがコード内に設定されているかご確認ください。</p>`;
+                // Updated error message to include more details for debugging.
+                scriptResultEl.innerHTML = `<p class="text-red-500 font-bold">エラーが発生しました。</p><p class="text-slate-600 text-sm mt-2">APIキーが有効でないか、ネットワークに問題がある可能性があります。外部サイトでご利用の場合は、有効なAPIキーがコード内に設定されているかご確認ください。</p><p class="text-xs text-slate-400 mt-2">詳細: ${error.message}</p>`;
             } finally {
                 loaderEl.style.display = 'none';
                 scriptResultEl.style.display = 'block';
